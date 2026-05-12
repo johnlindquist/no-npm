@@ -1,0 +1,14 @@
+# Block npm even when Codex sees an absolute path to an npm binary.
+#
+# Codex execpolicy evaluates commands before execution. With host executable
+# resolution enabled by Codex, an absolute program path ending in `npm` can
+# still match this basename rule.
+prefix_rule(
+    pattern = ["npm"],
+    decision = "forbidden",
+    justification = "npm is disabled in this demo. Ask whether to use pnpm, bun, or another package manager instead.",
+    match = [
+        ["npm"],
+        ["npm", "--version"],
+    ],
+)

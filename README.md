@@ -13,6 +13,9 @@ The pattern is intentionally simple:
    `PATH`.
 5. `.codex/bin/npm` appears before the real `npm`, so scripts that run `npm`
    by name hit the blocker.
+6. `.codex/rules/no-npm.rules` tells Codex execpolicy to reject agent/model
+   shell commands that invoke `npm`, including absolute paths that resolve to
+   an npm executable.
 
 This blocks `npm` when code launches it through `PATH`, such as:
 
@@ -21,8 +24,9 @@ spawn("npm", ["install"])
 ```
 
 It does not block a script that intentionally runs an absolute path such as
-`/opt/homebrew/bin/npm`. Use a container or OS-level sandbox when you need that
-level of enforcement.
+`/opt/homebrew/bin/npm`. The execpolicy layer covers Codex agent/model shell
+commands, not arbitrary local child processes or direct user shell commands.
+Use a container or OS-level sandbox when you need that level of enforcement.
 
 ## File Tree
 
@@ -31,6 +35,8 @@ level of enforcement.
 ├── .codex/
 │   ├── bin/
 │   │   └── npm
+│   ├── rules/
+│   │   └── no-npm.rules
 │   ├── zsh/
 │   │   ├── .zprofile
 │   │   └── .zshenv
@@ -79,6 +85,63 @@ and the script should end with `script-exit=127`.
 Do not use `--ignore-user-config` for this proof if your trust entry for the
 project lives in `~/.codex/config.toml`; skipping user config can also skip the
 trust entry that allows project `.codex/config.toml` to load.
+
+## Full-Path npm Proof For Agent Commands
+
+The PATH shim cannot catch this by itself:
+
+```sh
+/usr/local/bin/npm --version
+```
+
+That command names the executable directly, so there is no `PATH` lookup for
+zsh to influence.
+
+The project-local Codex execpolicy rule covers this case for Codex agent/model
+shell commands:
+
+```starlark
+prefix_rule(
+    pattern = ["npm"],
+    decision = "forbidden",
+    justification = "npm is disabled in this demo. Ask whether to use pnpm, bun, or another package manager instead.",
+)
+```
+
+You can test the rule directly:
+
+```sh
+codex execpolicy check \
+  --rules .codex/rules/no-npm.rules \
+  --resolve-host-executables \
+  --pretty \
+  /usr/local/bin/npm --version
+```
+
+Expected result: the JSON decision is `forbidden`, with `resolvedProgram` set to
+`/usr/local/bin/npm`.
+
+You can also test actual Codex agent execution:
+
+```sh
+codex exec -C "$PWD" --skip-git-repo-check --sandbox read-only \
+  'Run exactly this shell command and report stdout/stderr and exit code: /usr/local/bin/npm --version'
+```
+
+Expected result: Codex rejects the command before launch. There is no process
+exit code because npm never runs.
+
+This is different from a direct user shell command in interactive Codex. If you
+type a shell escape such as:
+
+```sh
+! /usr/local/bin/npm --version
+```
+
+that is an explicit user-invoked shell command. Today, that path bypasses
+Codex execpolicy, so the real npm binary can still run. To block that too,
+Codex would need to apply execpolicy to direct user shell commands, or the
+environment would need OS/container-level enforcement.
 
 ## Why Use `ZDOTDIR`
 
@@ -185,10 +248,13 @@ absolute executable path.
 Project zsh startup files cannot reliably stop a child process that directly
 execs the full path to the real npm binary, such as `/opt/homebrew/bin/npm` or
 `/usr/local/bin/npm`. At that point there is no `PATH` lookup left for zsh to
-influence.
+influence. This demo uses Codex execpolicy for that case only when the command
+is evaluated as a Codex agent/model shell command.
 
 For stronger enforcement, use one of these:
 
+- Codex execpolicy for Codex agent/model shell commands
+- a Codex code change that applies execpolicy to direct user shell commands
 - a devcontainer that does not install `npm`
 - an OS sandbox that denies access to the real `npm` binary
 - a CI/container environment with an allow-listed toolchain

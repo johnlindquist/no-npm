@@ -28,28 +28,38 @@ Requirements:
      - `Common replacements: pnpm install/add/run, bun install/add/run.`
    - It should exit with code `127`.
 
-4. Create `test-npm.js`.
+4. Create `.codex/rules/no-npm.rules`.
+   - Add a `prefix_rule` with `pattern = ["npm"]`.
+   - Set `decision = "forbidden"`.
+   - Set a justification telling the agent to ask whether to use pnpm, bun, or another package manager instead.
+   - Explain in comments that Codex execpolicy can catch absolute npm paths for agent/model shell commands when host executable resolution is enabled.
+
+5. Create `test-npm.js`.
    - Use Node's `child_process.spawn`.
    - First run `which npm`.
    - If `which npm` succeeds, run `npm --version`.
    - Exit with the child command's exit code.
    - Add comments explaining that spawned child processes do not see shell functions, so an executable PATH shim is required.
 
-5. Create `README.md`.
+6. Create `README.md`.
    - Explain the goal.
    - Show the file tree.
    - Explain the `ZDOTDIR` flow.
    - Explain that the project config only sets `ZDOTDIR` and leaves Codex defaults alone.
    - Explain that the demo changes `PATH` directly in `.codex/zsh/.zshenv` and `.codex/zsh/.zprofile` for simplicity's sake.
    - Explain how `.codex/bin/npm` blocks PATH-based npm calls.
+   - Explain how `.codex/rules/no-npm.rules` blocks Codex agent/model shell commands that invoke npm through an absolute path.
    - Include local verification:
      `ZDOTDIR="$PWD/.codex/zsh" zsh -lc 'command -v npm; node ./test-npm.js; echo script-exit=$?'`
    - Include Codex verification:
      `codex exec -C "$PWD" --skip-git-repo-check --sandbox read-only 'Run exactly this shell command and report stdout/stderr and exit code: zsh -lc '"'"'command -v npm; node ./test-npm.js; echo script-exit=$?'"'"''`
+   - Include execpolicy verification:
+     `codex execpolicy check --rules .codex/rules/no-npm.rules --resolve-host-executables --pretty /usr/local/bin/npm --version`
    - Clearly state the caveat that absolute paths can bypass a PATH shim.
-   - Explain that real enforcement requires a container or OS-level sandbox.
+   - Clearly state that direct user shell commands in interactive Codex are outside the execpolicy path today, so `! /usr/local/bin/npm --version` can still run.
+   - Explain that blocking direct user shell commands too requires a Codex code change, a container, or an OS-level sandbox.
 
-6. Make `.codex/bin/npm` executable.
+7. Make `.codex/bin/npm` executable.
 
 After creating the files, run the local verification command and report whether `npm` resolves to `.codex/bin/npm` and whether the script exits with `127`.
 ```
