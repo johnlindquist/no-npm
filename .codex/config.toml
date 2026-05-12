@@ -1,0 +1,13 @@
+# Project-local Codex config.
+#
+# Codex loads this file only after the project is trusted. That matters because
+# this config causes repo-local shell startup code to run for Codex shell
+# commands. Treat project `.codex/config.toml` like executable project code.
+
+[shell_environment_policy.set]
+# Tell zsh to load startup files from this project-local directory.
+#
+# This is a literal environment variable value, so the relative path assumes
+# Codex runs shell commands from the project root. For a production wrapper, use
+# an absolute path via `-c "shell_environment_policy.set.ZDOTDIR=..."`.
+ZDOTDIR = ".codex/zsh"

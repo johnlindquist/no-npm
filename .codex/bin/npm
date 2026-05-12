@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# PATH shim for Codex shell commands.
+#
+# This file intentionally has the same name as the real `npm` binary. Because
+# `.codex/zsh/` prepends `.codex/bin` to PATH, scripts that run `npm` by
+# name will hit this blocker before the system npm.
+#
+# Exit 127 means "command not found" in common shell conventions, which makes
+# this feel like npm is unavailable rather than like npm itself failed.
+cat >&2 <<'EOF'
+npm is disabled inside this Codex project environment.
+Do not choose a replacement automatically. Ask the user whether they want pnpm, bun, or another approach.
+Common replacements: pnpm install/add/run, bun install/add/run.
+EOF
+exit 127
